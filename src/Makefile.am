@@ -83,8 +83,10 @@ dosbox_x_LDADD += -lduktape
 endif
 
 if C_MONITOR
+if !MACOSX
 SUBDIRS += monitor
 dosbox_x_LDADD += monitor/libmonitor.a
+endif
 endif
 
 if EMSCRIPTEN
