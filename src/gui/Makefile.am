@@ -13,7 +13,9 @@ libgui_a_SOURCES = \
 	menu.cpp menu_callback.cpp bitop.cpp ptrop.cpp zipcrc.c zipfile.cpp 
 
 if C_MONITOR
+if !MACOSX
 libgui_a_LIBADD = ../monitor/libmonitor.a
+endif
 endif
 
 if C_MT32
