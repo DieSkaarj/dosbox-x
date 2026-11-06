@@ -270,37 +270,54 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 	for( size_t i{ 2 }; i <tUser.size(); ++i ) { 
 		paths.push_back( tUser.at( i ) );
 	}
-		printf( "%d\n",char(drive_letter-'A') );
-		printf( "%d\n",char('A'-drive_letter) );
 
+	int index= 0;
 	if( ( drive_letter - 'A' ) <2 ) {
-//		std::vector<std::string> fd_options= { "readonly" };
-		std::string &filename= paths.at( 0 );
-/*
-		fatDrive *newDrive = new fatDrive( filename.c_str(),0,0,0,0,fd_options );
-		if( newDrive->created_successfully ) printf( "Okay, good\n" );
-*/
-		printf( "%c\n",char(drive_letter-'A') );
-		std::string fart= (std::to_string( static_cast<int>(drive_letter-'A') )+" "+filename );
-		printf( "%s\n",fart.c_str() );
-		runImgmount( std::string( std::to_string( static_cast<int>(drive_letter-'A') )+std::string(" -u") ).c_str() );
-		runImgmount( fart.c_str() );
-/*
-		if( newDrive ){
-					imageDiskList[drive_letter-'A']->Release();
-					imageDiskList[drive_letter-'A'] = newDrive->loadedDisk;
-					imageDiskList[drive_letter-'A']->Addref();
-					imageDiskChange[drive_letter-'A'] = true;
+		std::vector<std::string> fd_options= { "readonly" };
+		std::vector< fatDrive * > imgDisks= {};
+		for( auto drive:paths ) {
+			fatDrive *newDrive = new fatDrive( drive.c_str(),0,0,0,0,fd_options );
+
+			if( !newDrive->created_successfully ) {
+				for( fatDrive *drive: imgDisks ) 
+					delete drive;
+				m.messageClient( m._client,"Death to all but metal." );
+
+				return EXIT_FAILURE;
+			}
+
+			if( dos_kernel_disabled ) {	
+				if( 0 ==index ) {
+					if( imageDiskList[ drive_letter - 'A' ]  )
+						imageDiskList[ drive_letter - 'A' ]->Release();
+					imageDiskList[ drive_letter - 'A' ]= newDrive->loadedDisk;
+					imageDiskList[ drive_letter - 'A' ]->Addref();
+					imageDiskChange[ drive_letter - 'A' ]= true;
+				} else {
+
+					if( diskSwap[ index-1 ] ) {
+						diskSwap[ index-1 ]->Release();
+					}
+					diskSwap[ index-1 ]= newDrive->loadedDisk;
+					diskSwap[ index-1 ]->Addref();
+				}
+				index++;
+			}
+			else {
+				imgDisks.push_back( newDrive );
+				DriveManager::AppendDisk( drive_letter - 'A',newDrive );
+			}
 		}
-		else
-			Monitor::messageClient( m._client,"Floppy reset not currently implemented.\n" );
-*/
-		return EXIT_FAILURE;
+
+		if( !dos_kernel_disabled )
+			DriveManager::InitializeDrive( drive_letter - 'A' );
+
+		return EXIT_SUCCESS;
 	}
 
 
 	/* The following code has been adapter from ../dos/dos_programs.cpp */
-	int item= drive_letter-'A';
+	int item= ( drive_letter - 'A' );
 	DOS_Drive *current_drive= Drives[ item ];
 
 	if( dos_kernel_disabled ) {
@@ -316,8 +333,8 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 
 	MSCDEX_SetCDInterface( CDROM_USE_SDL, -1 );
 	uint8_t mediaid = 0xF8;
-	std::vector<std::string> options= { "readonly" };
-	std::vector<DOS_Drive*> isoDisks= {};
+	std::vector< std::string > options= { "readonly" };
+	std::vector< DOS_Drive * > isoDisks= {};
 	for( auto drive:paths ) {
 		int error= -1;
 		DOS_Drive* newDrive = new isoDrive( drive_letter,
