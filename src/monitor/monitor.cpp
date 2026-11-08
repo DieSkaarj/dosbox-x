@@ -273,7 +273,7 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 
 	int index= 0;
 	if( ( drive_letter - 'A' ) <2 ) {
-#if !defined(HX_DOS) || !defined(OSFREE)
+#if defined(WIN32) || defined(LINUX)
 		std::vector<std::string> fd_options= { "readonly" };
 		std::vector< fatDrive * > imgDisks= {};
 		for( auto drive:paths ) {
