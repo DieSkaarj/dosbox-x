@@ -64,19 +64,6 @@ std::string ImageDiskTypeToString( imageDisk::IMAGE_TYPE tType ) {
 	}
 };
 
-/* Media driver adapted from ../dos/dos_programs.cpp */
-#if defined(MACOSX)
-extern const char* MSG_GetUTF8(const char* msg);
-constexpr auto MSGX=MSG_GetUTF8;
-#else
-constexpr auto MSGX=MSG_Get;
-#endif
-constexpr int MEDIA_ID=0xF8;
-
-extern bool wpcolon;
-extern void MSCDEX_SetCDInterface( int,int );
-extern char lastmount;
-
 // Monitor::Configurator {{{ 
 static std::string CONFIG_USAGE_MONITOR= { // {{{
 "The DOSBox-X socket pipeline configurator\n"\
@@ -253,51 +240,20 @@ bool	Monitor::Programs::displayInfo( Monitor &tM,const cmd_tokens_t& ) {/* {{{ *
 	messageClient( m._client,"\n" );
 	return EXIT_SUCCESS;
 }	/* }}} */
-#include "programs.h" 
-
-int	createDrives( char tDriveLetter,std::vector< std::string > tPaths,std::vector< DOS_Drive * > &tISOs ) { /* {{{ */
-	MSCDEX_SetCDInterface( CDROM_USE_SDL, -1 );
-	std::vector<std::string> options= { "readonly" };
-	for( auto drive:tPaths ) {
-		int error= -1;
-		DOS_Drive* newDrive = new isoDrive( tDriveLetter,
-			wpcolon&&drive.length() >1&&drive.c_str()[0]==':'?
-				drive.c_str()+1 : drive.c_str(),
-				MEDIA_ID,error,options );
-		tISOs.push_back( newDrive );
-		if( error ) {
-			for( DOS_Drive *drive: tISOs ) 
-				delete drive;
-
-			return error;
-		}
-	}
-	return EXIT_SUCCESS;
-};/* }}} */
-
-std::string	handleError( int tErrorCode ) { /* {{{ */
-	switch( tErrorCode ) {
-		case 0: return  "";
-		case 1: return  MSGX("MSCDEX_ERROR_MULTIPLE_CDROMS");
-		case 2: return  MSGX("MSCDEX_ERROR_NOT_SUPPORTED");
-		case 3: return  MSGX("MSCDEX_ERROR_OPEN");
-		case 4: return  MSGX("MSCDEX_TOO_MANY_DRIVES");
-		case 5: return  MSGX("MSCDEX_LIMITED_SUPPORT");
-		case 6: return  MSGX("MSCDEX_INVALID_FILEFORMAT");
-	}
-	return MSGX("MSCDEX_UNKNOWN_ERROR");
-};/* }}} */
 
 bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tUser ) {/* {{{ */
 	Monitor& m= tM;
 	std::vector< int > availableDrives= {};
 	Get_IDECD_drives( availableDrives );
+	for( int i= 0; i<2; ++i )
+		if( imageDiskList[ i ] )
+			availableDrives.push_back( i );
 
 	if( availableDrives.empty() ) {
-		Monitor::messageClient( m._client,MSGX( "ERROR" ) );
+		Monitor::messageClient( m._client,"MONITOR no available drives.\n" );
 		return EXIT_FAILURE;
 	}
-					
+
 	char drive_letter= tUser.at( 1 ).at( 0 );
 	drive_letter= std::toupper( drive_letter );
 	bool drive_check= false;
@@ -305,40 +261,114 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 		if ( char( 'A'+drive_no ) ==drive_letter ) drive_check =true;
 
 	if ( false ==drive_check ) {
-		Monitor::messageClient( m._client,MSGX( "MSCDEX_UNKNOWN_ERROR" ) );
+		Monitor::messageClient( m._client,"Drive letter not recognized.\n" );
 		return EXIT_FAILURE;
 	}
 
 	std::vector< std::string > paths= { };
-	for( size_t i{ 2 }; i <tUser.size(); ++i ) 
-		paths.emplace_back( tUser.at( i ) );
+
+	for( size_t i{ 2 }; i <tUser.size(); ++i ) { 
+		paths.push_back( tUser.at( i ) );
+	}
+
+	int index= 0;
+	if( ( drive_letter - 'A' ) <2 ) {
+		std::vector<std::string> fd_options= { "readonly" };
+		std::vector< fatDrive * > imgDisks= {};
+		for( auto drive:paths ) {
+			fatDrive *newDrive = new fatDrive( drive.c_str(),0,0,0,0,fd_options );
+
+			if( !newDrive->created_successfully ) {
+				for( fatDrive *drive: imgDisks ) 
+					delete drive;
+				m.messageClient( m._client,"MONITOR Drive(s) not avilable." );
+
+				return EXIT_FAILURE;
+			}
+
+			if( dos_kernel_disabled ) {	
+				if( 0 ==index ) {
+					if( imageDiskList[ drive_letter - 'A' ]  )
+						imageDiskList[ drive_letter - 'A' ]->Release();
+					imageDiskList[ drive_letter - 'A' ]= newDrive->loadedDisk;
+					imageDiskList[ drive_letter - 'A' ]->Addref();
+					imageDiskChange[ drive_letter - 'A' ]= true;
+				} else {
+
+					if( diskSwap[ index-1 ] ) {
+						diskSwap[ index-1 ]->Release();
+					}
+					diskSwap[ index-1 ]= newDrive->loadedDisk;
+					diskSwap[ index-1 ]->Addref();
+				}
+				index++;
+			}
+			else {
+				imgDisks.push_back( newDrive );
+				DriveManager::AppendDisk( drive_letter - 'A',newDrive );
+			}
+		}
+
+		if( !dos_kernel_disabled )
+			DriveManager::InitializeDrive( drive_letter - 'A' );
+
+		return EXIT_SUCCESS;
+	}
+
+
+	/* The following code has been adapter from ../dos/dos_programs.cpp */
+	int item= ( drive_letter - 'A' );
+	DOS_Drive *current_drive= Drives[ item ];
+
+	if( dos_kernel_disabled ) {
+		if ( nullptr ==current_drive ) {
+			m.messageClient( m._client,"MONITOR nodrive\n" );
+			return EXIT_FAILURE;
+		}
+	}
+
 	if( paths.empty() ) {
-		Monitor::messageClient( m._client,MSGX( "ERROR" ) );
 		return EXIT_FAILURE;
 	}
-	/* Unlike the IMGMOUNT program we can only replace existing drives. */
-	int entry= drive_letter-'A';
-	std::vector<DOS_Drive*> isoDisks= {};
-	if( int code= createDrives( drive_letter,paths,isoDisks ) ) {
-			m.messageClient( m._client,handleError( code ) );
+
+	MSCDEX_SetCDInterface( CDROM_USE_SDL, -1 );
+	uint8_t mediaid = 0xF8;
+	std::vector< std::string > options= { "readonly" };
+	std::vector< DOS_Drive * > isoDisks= {};
+	for( auto drive:paths ) {
+		int error= -1;
+		DOS_Drive* newDrive = new isoDrive( drive_letter,
+			wpcolon&&drive.length() >1&&drive.c_str()[0]==':'?
+				drive.c_str()+1 : drive.c_str(),
+				mediaid,error,options );
+		isoDisks.push_back( newDrive );
+		std::string errmsg="";
+		switch( error ) {
+			case 0: break;
+			case 1: errmsg=  MSG_Get("MSCDEX_ERROR_MULTIPLE_CDROMS"); break;
+			case 2: errmsg=  MSG_Get("MSCDEX_ERROR_NOT_SUPPORTED");   break;
+			case 3: errmsg=  MSG_Get("MSCDEX_ERROR_OPEN");            break;
+			case 4: errmsg=  MSG_Get("MSCDEX_TOO_MANY_DRIVES");       break;
+			case 5: errmsg=  MSG_Get("MSCDEX_LIMITED_SUPPORT");       break;
+			case 6: errmsg=  MSG_Get("MSCDEX_INVALID_FILEFORMAT");    break;
+			default: errmsg= MSG_Get("MSCDEX_UNKNOWN_ERROR");         break;
+		}
+		if( error ) {
+			for( DOS_Drive *drive: isoDisks ) 
+				delete drive;
+			m.messageClient( m._client,errmsg );
+
 			return EXIT_FAILURE;
+		}
 	}
-	DriveManager::ClearDrive( entry );
-
+	DriveManager::ClearDrive( item );
 	for( auto media:isoDisks )
-		DriveManager::AppendDisk( entry,media );
-	DriveManager::InitializeDrive( entry );
+		DriveManager::AppendDisk( drive_letter - 'A',media );
+	DriveManager::InitializeDrive( item );
+	Drives[ item ]->Activate();
+	Drives[ item ]->MediaChange();
 
-	if (!dos_kernel_disabled)
-		mem_writeb( Real2Phys( dos.tables.mediaid ) + entry * dos.tables.dpb_size,MEDIA_ID );
-
-	Drives[ entry ]->Activate();
-	if( !dos_kernel_disabled )
-		static_cast< isoDrive*>( Drives[ entry ] )->MediaChangeImmediate();
-	else
-		Drives[ entry ]->MediaChange();
-
-	lastmount = entry;
+	lastmount = item;
 
 	return EXIT_SUCCESS;
 }/* }}} */
