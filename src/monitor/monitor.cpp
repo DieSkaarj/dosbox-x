@@ -23,7 +23,7 @@
 
 #include "control.h"
 #include "programs.h"
-#include "../dos/drives.h"
+#include "drives.h"
 #include "bios_disk.h"
 
 Monitor *Monitor::ptr_monitor= nullptr;
