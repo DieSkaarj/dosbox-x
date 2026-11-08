@@ -273,7 +273,7 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 
 	int index= 0;
 	if( ( drive_letter - 'A' ) <2 ) {
-#if defined(HX_DOS)
+#if defined(HX_DOS) || defined(OSFREE)
 		m.messageClient( m._client,"MONITOR Drive(s) not avilable." );
 		return EXIT_FAILURE;
 #endif
