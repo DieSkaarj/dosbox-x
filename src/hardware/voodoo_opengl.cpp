@@ -1734,7 +1734,7 @@ void voodoo_ogl_reset_videomode(void) {
 	DOSBox_NoMenu();
 #endif
 
-    GFX_DisplayMainMenubar(false);
+  GFX_DisplayMainMenubar(false);
 
 	last_clear_color=0;
 
@@ -1836,9 +1836,9 @@ void voodoo_ogl_reset_videomode(void) {
 		}
 	}
 #endif
-    ApplyPreventCap();
+  ApplyPreventCap();
 
-    v->ogl_dimchange = true;
+  v->ogl_dimchange = true;
 
 	glViewport( 0, 0, new_width, new_height );
 	last_width = new_width;
@@ -1848,9 +1848,9 @@ void voodoo_ogl_reset_videomode(void) {
      *      This is said to be the initial state of an OpenGL context.
      *      This is in direct contradiction to the OpenGL output setup
      *      in src/gui/sdlmain.cpp that sets up GL_FLAT shading */
-    glShadeModel (GL_SMOOTH);
+  glShadeModel (GL_SMOOTH);
 
-    GFX_DisplayMainMenubar(false);
+  GFX_DisplayMainMenubar(false);
 	GFX_UpdateSDLCaptureState();
 
 	int value;

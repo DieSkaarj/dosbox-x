@@ -95,6 +95,10 @@ extern int tryconvertcp, Reflect_Menu(void);
 bool kana_input = false; // true if a half-width kana was typed
 bool displayMainMenubar = false;
 
+#if defined (LINUX)
+void voodoo_ogl_update_dimensions(void);
+#endif
+
 #if __APPLE__ && __MAC_OS_X_VERSION_MIN_REQUIRED < 101200
 #define IS_OLDMACOS 1 /* FIX_ME: Tested on El Capitan (10.11). If this macro is required for Sierra (10.12), change to 101300 */
 #endif
