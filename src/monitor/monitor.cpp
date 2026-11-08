@@ -21,9 +21,9 @@
 
 #if C_MONITOR
 
+#include "drives.h"
 #include "control.h"
 #include "programs.h"
-#include "drives.h"
 #include "bios_disk.h"
 
 Monitor *Monitor::ptr_monitor= nullptr;
@@ -273,7 +273,10 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 
 	int index= 0;
 	if( ( drive_letter - 'A' ) <2 ) {
-#if !defined(HX_DOS) || !defined(OSFREE)
+#if defined(HX_DOS)
+		m.messageClient( m._client,"MONITOR Drive(s) not avilable." );
+		return EXIT_FAILURE;
+#endif
 		std::vector<std::string> fd_options= { "readonly" };
 		std::vector< fatDrive * > imgDisks= {};
 		for( auto drive:paths ) {
@@ -312,10 +315,6 @@ bool	Monitor::Programs::changeRemovableMedia( Monitor &tM,const cmd_tokens_t &tU
 
 		if( !dos_kernel_disabled )
 			DriveManager::InitializeDrive( drive_letter - 'A' );
-#else
-		m.messageClient( m._client,"MONITOR Drive(s) not avilable." );
-		return EXIT_FAILURE;
-#endif
 		return EXIT_SUCCESS;
 	}
 
